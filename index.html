@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>香港街市錦囊 (HK Wet Market Survival Kit)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'wet-market-guide';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        
+        window.firebaseApp = initializeApp(firebaseConfig);
+        window.db = getFirestore(window.firebaseApp);
+        window.auth = getAuth(window.firebaseApp);
+        window.appId = appId;
+
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(window.auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(window.auth);
+                }
+                console.log("Firebase Auth Ready");
+            } catch (error) {
+                console.error("Auth error:", error);
+            }
+        };
+        initAuth();
+    </script>
+
+    <style>
+        body {
+            font-family: 'Noto Sans HK', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            overflow-x: hidden;
+            touch-action: manipulation;
+        }
+        
+        /* Wet Market Theme */
+        .market-container {
+            background-color: #ffffff;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border-radius: 24px;
+            /* The iconic Red Lamp Shade top border */
+            border-top: 12px solid #ef4444; 
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Red Lamp Motif */
+        .red-lamp {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 60px;
+            background-color: #ef4444;
+            border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+            box-shadow: 0 10px 20px rgba(239, 68, 68, 0.4);
+            z-index: 10;
+        }
+        .red-lamp::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 10px;
+            background-color: #fef08a; /* Bulb glow */
+            border-radius: 50%;
+            box-shadow: 0 0 15px 5px rgba(254, 240, 138, 0.8);
+        }
+
+        .text-market-red { color: #ef4444; }
+        .bg-market-red { background-color: #ef4444; }
+        .text-market-green { color: #16a34a; }
+        .bg-market-green { background-color: #16a34a; }
+
+        /* Buttons */
+        .btn-app {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid transparent;
+        }
+        .btn-app:active {
+            transform: scale(0.97);
+        }
+        .btn-option {
+            background-color: #f8fafc;
+            border: 2px solid #e2e8f0;
+            color: #334155;
+        }
+        .btn-option:hover, .btn-option:active {
+            border-color: #ef4444;
+            background-color: #fef2f2;
+        }
+
+        /* Notifications & Cards */
+        .scenario-card {
+            background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
+            border-left: 4px solid #ef4444;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Timer Bar */
+        #timer-bar { transition: width 0.1s linear, background-color 0.3s; }
+        .timer-warning { background-color: #dc2626 !important; }
+
+        /* Animations */
+        .fade-enter {
+            opacity: 0;
+            transform: translateY(15px);
+            transition: all 0.3s ease-out;
+        }
+        .fade-enter-active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .hidden-screen { display: none !important; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-slate-200">
+
+    <div id="game-container" class="max-w-md w-full market-container relative flex flex-col h-[750px] max-h-[90vh]">
+        <div class="red-lamp"></div>
+        
+        <!-- Screen 1: Start Menu -->
+        <div id="screen-start" class="p-8 pt-20 flex flex-col items-center justify-center h-full text-center fade-enter fade-enter-active bg-white">
+            <div class="text-7xl mb-4">🛒🥬</div>
+            
+            <h1 class="text-3xl font-black text-market-red mb-2 tracking-wide">香港街市錦囊</h1>
+            <h2 class="text-lg font-bold mb-6 text-slate-500">HK Wet Market Survival Kit</h2>
+            
+            <div class="text-sm font-bold text-slate-600 mb-8 bg-slate-50 p-5 rounded-2xl border border-slate-200 text-left leading-relaxed">
+                <p class="mb-2">👋 Welcome to the local Hong Kong wet market!</p>
+                <p>Learn the authentic Cantonese slang to bargain and shop like a true local.</p>
+                <p class="text-market-red mt-2">Mission: Choose the correct Jyutping (Cantonese pronunciation) for the scenario.</p>
+            </div>
+            
+            <button onclick="startGame()" class="w-full btn-app bg-market-red text-white font-bold py-4 px-8 rounded-2xl text-xl shadow-lg shadow-red-900/20 mb-4">
+                Let's go shopping! 🛍️
+            </button>
+        </div>
+
+        <!-- Screen 2: Gameplay -->
+        <div id="screen-game" class="hidden-screen flex-col h-full relative bg-slate-50 pt-12">
+            <!-- Timer Bar -->
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-slate-200 z-20">
+                <div id="timer-bar" class="h-full bg-green-500 w-full"></div>
+            </div>
+
+            <div class="p-5 flex flex-col h-full">
+                <!-- Header -->
+                <div class="flex justify-between items-center mb-4">
+                    <div class="text-market-red font-bold text-sm bg-red-100 px-3 py-1.5 rounded-lg border border-red-200">
+                        Task <span id="ui-question-count">1/13</span>
+                    </div>
+                    <div class="font-black text-lg text-slate-700">
+                        Score: <span id="ui-score" class="text-market-green">0</span>
+                    </div>
+                </div>
+
+                <!-- Scenario Card -->
+                <div class="scenario-card p-4 rounded-2xl mb-4 relative">
+                    <div class="absolute -top-3 left-4 bg-market-red text-white text-xs font-bold px-2 py-1 rounded shadow-sm">
+                        Scenario
+                    </div>
+                    <p id="ui-scenario-en" class="text-slate-800 text-[16px] mt-2 leading-relaxed font-bold mb-2"></p>
+                    <p id="ui-scenario" class="text-slate-500 text-[13px] leading-relaxed"></p>
+                </div>
+
+                <!-- Target Word (Chinese + English Translation) -->
+                <div class="flex flex-col items-center justify-center mb-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                    <h2 id="ui-word" class="text-4xl font-black text-market-red tracking-wider mb-1"></h2>
+                    <div id="ui-word-en" class="text-slate-500 font-bold mb-3 text-sm"></div>
+                    <button onclick="playCurrentAudio()" class="text-market-red hover:bg-red-50 bg-white rounded-full py-2 px-5 flex items-center justify-center gap-2 text-sm border-2 border-red-200 font-bold transition-colors">
+                        🔊 Listen to Pronunciation
+                    </button>
+                </div>
+
+                <!-- Options -->
+                <div class="text-xs font-bold text-slate-400 mb-2 px-1">Select the correct Jyutping:</div>
+                <div id="ui-options" class="flex-grow flex flex-col gap-3 pb-2">
+                    <!-- Buttons injected by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Overlay: Feedback Modal -->
+        <div id="modal-feedback" class="absolute inset-0 bg-slate-900/70 flex flex-col items-center justify-center p-4 hidden-screen z-40 backdrop-blur-sm">
+            <div class="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl transform transition-all">
+                <div class="text-center mb-4">
+                    <div id="feedback-icon" class="text-6xl mb-2"></div>
+                    <h3 id="feedback-title" class="text-2xl font-black mb-1"></h3>
+                </div>
+                
+                <div class="text-center mb-4">
+                    <div class="text-lg font-bold text-slate-700 mb-0" id="feedback-word"></div>
+                    <div class="text-sm font-bold text-slate-400 mb-2" id="feedback-word-en"></div>
+                    <div class="text-2xl font-black text-market-red bg-red-50 py-2 rounded-xl border border-red-100" id="feedback-correct-ans"></div>
+                </div>
+                
+                <div class="bg-amber-50 border border-amber-200 p-4 rounded-xl text-left mb-6 relative">
+                    <h4 class="text-amber-800 font-bold mb-1 text-xs uppercase tracking-wider">💡 Local Tip</h4>
+                    <p id="feedback-tip-en" class="text-slate-700 text-sm leading-relaxed italic mb-2"></p>
+                    <p id="feedback-tip" class="text-slate-600 text-xs leading-relaxed font-bold"></p>
+                </div>
+
+                <button onclick="nextQuestion()" class="w-full btn-app bg-market-red text-white font-bold py-3.5 px-8 rounded-xl text-lg">
+                    Next ➔
+                </button>
+            </div>
+        </div>
+
+        <!-- Screen 3: Game Over -->
+        <div id="screen-end" class="hidden-screen p-6 pt-20 flex flex-col items-center justify-center h-full text-center relative z-10 bg-white">
+            <div class="text-6xl mb-4">🎉</div>
+            <h1 class="text-3xl font-black text-market-red mb-2">Shopping Done!</h1>
+            <p class="text-slate-500 font-bold text-sm mb-8">You got your survival kit!</p>
+            
+            <div class="bg-slate-50 p-6 rounded-3xl border border-slate-200 w-full mb-8 relative">
+                <div class="text-sm text-slate-500 font-bold mb-2 uppercase tracking-wider">Total Score</div>
+                <div class="text-6xl font-black text-market-green mb-4"><span id="ui-final-score">0</span></div>
+                <div class="border-t border-slate-200 pt-4 mt-2">
+                    <div class="text-xs text-slate-400 font-bold mb-1">Your Local Status</div>
+                    <div id="ui-rank" class="text-lg font-black text-market-red"></div>
+                </div>
+            </div>
+
+            <button onclick="resetGame()" class="w-full btn-app bg-slate-800 text-white font-bold py-4 px-8 rounded-xl text-lg mb-3">
+                🔄 Play Again
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /* 
+         * Game Data: Designed for foreigners learning Cantonese.
+         * Focuses on Wet Market scenarios.
+         * Includes English translations and Jyutping distractors.
+         */
+        const gameData = [
+            {
+                word: "搭棵蔥",
+                wordEn: "Free spring onion",
+                scenarioEn: "You bought a lot of vegetables. The auntie throws in a free spring onion to show her appreciation.",
+                scenario: "買咗好多菜，阿姐送多棵蔥畀你，呢個行為叫...",
+                correct: "daap3 po1 cung1",
+                options: ["daap3 po1 cung1", "daap3 fo2 cong1", "daap3 ko1 cung1"],
+                ttsWord: "搭棵蔥",
+                tipEn: "Meaning: To throw in a free spring onion. '搭' (daap3) means to add on. It's a classic wet market perk showing local hospitality!",
+                tip: "【意思：買菜送蔥】『搭』(daap3) 有附加的意思。街市買菜常見的人情味表現。"
+            },
+            {
+                word: "找錢",
+                wordEn: "Give change",
+                scenarioEn: "You pay with a $100 bill for a $20 item. You wait for the seller to give you your change.",
+                scenario: "你畀一百蚊買廿蚊嘢，等老闆畀番餘額你，呢個動作叫...",
+                correct: "zaau2 cin2",
+                options: ["zaau2 cin4", "zaau2 cin2", "zao2 qian2"],
+                ttsWord: "找淺", 
+                tipEn: "Meaning: To give change. Watch the tone! '錢' (money) is normally Tone 4 (cin4), but here it changes to Tone 2 (cin2).",
+                tip: "【意思：找續】注意口語變調！『錢』本讀 cin4，但在『找錢』中習慣變調讀第2聲 (cin2)。"
+            },
+            {
+                word: "一蚊雞",
+                wordEn: "One buck / One dollar",
+                scenarioEn: "The seller says the lemon is very cheap, it only costs one dollar.",
+                scenario: "老闆話個檸檬賣一蚊，俗語會講...",
+                correct: "jat1 man1 gai1",
+                options: ["jat1 man1 gai1", "jat1 man1 gai4", "yi1 wen2 ji1"],
+                tipEn: "Meaning: One dollar. '蚊' (man1) is slang for dollar, and '雞' (gai1 / chicken) is added just for a catchy rhythm!",
+                tip: "【意思：一元】『蚊』是元的俗稱，後面加『雞』是為了順口，香港特有說法。"
+            },
+            {
+                word: "呃秤",
+                wordEn: "Short weight (Cheat on scale)",
+                scenarioEn: "You bought 1kg of meat, but when you weigh it at home, it's only 800g. You've been cheated on the weight.",
+                scenario: "買一斤肉，返屋企磅發現得八兩，你畀人...",
+                correct: "aak1 cing3",
+                options: ["aak1 cing3", "aak1 ping4", "e4 cheng4"],
+                ttsWord: "厄秤",
+                tipEn: "Meaning: To cheat on weight. '呃' (aak1) means to cheat. A useful word to know to avoid dishonest vendors!",
+                tip: "【意思：偷工減料，騙秤】『呃』(aak1) 是騙的意思。入聲字要讀得短促。"
+            },
+            {
+                word: "新鮮熱辣",
+                wordEn: "Piping hot and fresh",
+                scenarioEn: "The roasted pork just came out of the oven. It's piping hot and incredibly fresh.",
+                scenario: "啲燒肉啱啱出爐，熱辣辣，我哋會形容為...",
+                correct: "san1 sin1 jit6 laat6",
+                options: ["san1 sin1 jit6 laat6", "san1 sin1 yit6 laat6", "xin1 xian1 re4 la4"],
+                tipEn: "Meaning: Freshly made, piping hot. '熱辣' (jit6 laat6) emphasizes the intense heat and freshness.",
+                tip: "【意思：新鮮出爐，非常熱】『熱』(jit6) 和『辣』(laat6) 都是入聲字，形容食物剛出爐的狀態。"
+            },
+            {
+                word: "搭單",
+                wordEn: "Piggyback an order",
+                scenarioEn: "Your friend is buying an apple. You ask him to 'piggyback' and buy an orange for you at the same time.",
+                scenario: "朋友買緊蘋果，你叫佢順便幫你買個橙，呢個行為叫...",
+                correct: "daap3 daan1",
+                options: ["daap3 daan1", "daap3 dan1", "da1 dan1"],
+                tipEn: "Meaning: To piggyback on someone's order. '搭' (daap3) means to join or add on.",
+                tip: "【意思：順便一起買】『搭』(daap3) 是入聲字。指順便拜託別人一起購買。"
+            },
+            {
+                word: "豬肉佬",
+                wordEn: "Pork butcher",
+                scenarioEn: "The man who sells pork at the butcher stall. It's a very common, slightly colloquial title.",
+                scenario: "喺街市賣豬肉嘅男人，通常被街坊稱為...",
+                correct: "zyu1 juk6 lou2",
+                options: ["zyu1 juk6 lou2", "zyu1 juk6 nan4", "zhu1 rou4 lao3"],
+                tipEn: "Meaning: Pork butcher (colloquial). '佬' (lou2) is a colloquial term for a man, often used for tradesmen.",
+                tip: "【意思：賣豬肉的男人】『佬』(lou2) 是對男性的通俗稱呼，街市中常見（如：賣魚佬）。"
+            },
+            {
+                word: "散紙",
+                wordEn: "Loose change",
+                scenarioEn: "You give the seller a $500 bill, but he asks if you have small loose change instead.",
+                scenario: "你畀五百蚊大紙，老闆問你有無散紙，即係問你有無...",
+                correct: "saan2 zi2",
+                options: ["saan2 zi2", "saan3 zi2", "san3 zhi3"],
+                ttsWord: "饊紙", 
+                tipEn: "Meaning: Loose change/coins. Note the tone change! '散' changes to Tone 2 (saan2) here.",
+                tip: "【意思：零錢】注意變調！『散』在這裡變調讀第2聲 (saan2)，指零碎的錢。"
+            },
+            {
+                word: "幾錢斤",
+                wordEn: "How much per catty?",
+                scenarioEn: "You want to know the price of the vegetables per catty (a traditional Chinese unit of mass, about 600g).",
+                scenario: "你想知道菜心一斤賣多少錢，你會問老闆...",
+                correct: "gei2 cin2 gan1",
+                options: ["gei2 cin2 gan1", "gei2 cin4 gan1", "ji1 qian2 jin1"],
+                ttsWord: "幾淺斤",
+                tipEn: "Meaning: How much per catty? '斤' (gan1/catty) is the standard weight unit in wet markets, not kilos! Note '錢' changes to Tone 2 (cin2).",
+                tip: "【意思：一斤多少錢】街市主要用『斤』(gan1) 做單位，不用公斤！注意『錢』口語變調為第2聲 (cin2)。"
+            },
+            {
+                word: "斬件",
+                wordEn: "Chop into pieces",
+                scenarioEn: "You bought a whole roast duck and want the butcher to chop it into bite-sized pieces for you.",
+                scenario: "買了一隻燒鴨，你想請老闆幫你切成一塊塊方便食用，你會要求...",
+                correct: "zaam2 gin6",
+                options: ["zaam2 gin6", "zaam2 gin2", "zhan3 jian4"],
+                ttsWord: "斬件",
+                tipEn: "Meaning: To chop into pieces. '斬' (zaam2) means to chop with a heavy knife. Essential for buying roast meats (Siu Mei)!",
+                tip: "【意思：切塊】『斬』(zaam2) 係用大菜刀切開的意思，買燒味（燒肉、燒鴨）必學用語！"
+            },
+            {
+                word: "游水",
+                wordEn: "Live (swimming) seafood",
+                scenarioEn: "At the seafood stall, you want to buy a fish that is still alive and swimming in the tank, not the chilled ones on ice.",
+                scenario: "在海鮮檔，你想買還在魚缸裡活生生游動的魚，而不是冰鮮魚。你會指明要...",
+                correct: "jau4 seoi2",
+                options: ["jau4 seoi2", "jau4 seoi3", "you2 shui3"],
+                ttsWord: "游水",
+                tipEn: "Meaning: Live seafood. Literally 'swimming'. This is the ultimate standard for fresh seafood in Hong Kong!",
+                tip: "【意思：活海鮮】字面意思是游水。在香港，『游水魚』代表絕對的新鮮！"
+            },
+            {
+                word: "膠袋",
+                wordEn: "Plastic bag",
+                scenarioEn: "The vendor packed your items and asks if you need a bag (which costs an extra $1 HKD by environmental law).",
+                scenario: "買完菜，老闆問你需要不需要加一元買個袋子來裝，他會問你要不要...",
+                correct: "gaau1 doi2",
+                options: ["gaau1 doi2", "gaau1 doi6", "jiao1 dai4"],
+                ttsWord: "膠袋",
+                tipEn: "Meaning: Plastic bag. By law, it costs $1 HKD. Note that '袋' (bag) often changes to Tone 2 (doi2) in spoken Cantonese.",
+                tip: "【意思：塑料袋】香港法例規定索取膠袋要收費$1。注意口語中『袋』常變調讀第2聲 (doi2)。"
+            },
+            {
+                word: "靚女",
+                wordEn: "Pretty girl (Vendor)",
+                scenarioEn: "You want to get the female vendor's attention to buy something. Calling her this friendly term is the best icebreaker!",
+                scenario: "你想引起女檔主注意並開始買東西。在街市，最受歡迎的親切稱呼是...",
+                correct: "leng3 neoi5",
+                options: ["leng3 neoi5", "leng3 neoi2", "liang4 nv3"],
+                ttsWord: "靚女",
+                tipEn: "Meaning: Pretty girl. It's the most common and polite way to address a female vendor, regardless of her age! Use 'leng3 zai2' for men.",
+                tip: "【意思：美女】街市萬用打招呼詞！不管檔主年紀多大，叫『靚女』或『靚仔』一定能獲得熱情招待。"
+            }
+        ];
+
+        /* Game State Variables */
+        let currentQuestionIndex = 0;
+        let score = 0;
+        const BASE_SCORE = 100;
+        let shuffledQuestions = [];
+
+        // Timer mechanics
+        let timerInterval;
+        let timeLeft = 100; 
+        const TIME_LIMIT_MS = 25000;
+        const TICK_RATE = 50;
+
+        /* Voice Initialization */
+        let hkVoices = [];
+        function initVoices() {
+            const voices = window.speechSynthesis.getVoices();
+            hkVoices = voices.filter(v => v.lang === 'zh-HK' || v.lang === 'yue-Hant-HK' || v.lang.includes('HK'));
+        }
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.onvoiceschanged = initVoices;
+            initVoices();
+        }
+
+        /* Helper Functions */
+        function shuffleArray(array) {
+            return array.map(value => ({ value, sort: Math.random() }))
+                        .sort((a, b) => a.sort - b.sort)
+                        .map(({ value }) => value);
+        }
+
+        function $(id) { return document.getElementById(id); }
+
+        function showScreen(screenId) {
+            ['screen-start', 'screen-game', 'modal-feedback', 'screen-end'].forEach(id => {
+                if(!$(id).classList.contains('hidden-screen')) {
+                    $(id).classList.add('hidden-screen');
+                    $(id).classList.remove('fade-enter-active', 'fade-enter');
+                }
+            });
+            const el = $(screenId);
+            el.classList.remove('hidden-screen');
+            el.classList.add('fade-enter');
+            setTimeout(() => el.classList.add('fade-enter-active'), 20);
+        }
+
+        window.startGame = function() {
+            currentQuestionIndex = 0;
+            score = 0;
+            $('ui-score').innerText = score;
+            shuffledQuestions = shuffleArray([...gameData]); 
+            showScreen('screen-game');
+            loadQuestion();
+        }
+
+        window.resetGame = function() { 
+            showScreen('screen-start'); 
+        }
+
+        function loadQuestion() {
+            const q = shuffledQuestions[currentQuestionIndex];
+            
+            $('ui-question-count').innerText = `${currentQuestionIndex + 1}/${shuffledQuestions.length}`;
+            $('ui-scenario-en').innerText = q.scenarioEn;
+            $('ui-scenario').innerText = q.scenario;
+            $('ui-word').innerText = q.word;
+            $('ui-word-en').innerText = q.wordEn;
+
+            const optionsContainer = $('ui-options');
+            optionsContainer.innerHTML = '';
+            
+            const shuffledOptions = shuffleArray([...q.options]);
+
+            shuffledOptions.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = "btn-app btn-option w-full py-4 px-5 text-left flex justify-between font-bold rounded-xl text-lg shadow-sm";
+                btn.innerHTML = `<span class="text-xl text-slate-700">${opt}</span> <span class="text-red-400 opacity-50 text-sm">Select</span>`;
+                btn.onclick = () => checkAnswer(opt, q);
+                optionsContainer.appendChild(btn);
+            });
+
+            startTimer();
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            timeLeft = 100;
+            const timerBar = $('timer-bar');
+            timerBar.style.width = '100%';
+            timerBar.classList.remove('timer-warning');
+
+            const decreaseAmount = 100 / (TIME_LIMIT_MS / TICK_RATE);
+
+            timerInterval = setInterval(() => {
+                timeLeft -= decreaseAmount;
+                timerBar.style.width = `${Math.max(0, timeLeft)}%`;
+                
+                if (timeLeft < 30) {
+                    timerBar.classList.add('timer-warning');
+                }
+
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    handleTimeOut();
+                }
+            }, TICK_RATE);
+        }
+
+        function handleTimeOut() {
+            const q = shuffledQuestions[currentQuestionIndex];
+            checkAnswer(null, q, true); 
+        }
+
+        window.speakCantonese = function(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'zh-HK';
+                utterance.rate = 0.85; 
+                
+                if (hkVoices.length > 0) {
+                    const femaleVoice = hkVoices.find(v => 
+                        v.name.includes('Sin-ji') || v.name.includes('HiuMaan') || 
+                        v.name.includes('Google') || v.name.includes('Mei-Jia')
+                    );
+                    utterance.voice = femaleVoice || hkVoices[0];
+                }
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        window.playCurrentAudio = function() {
+            const q = shuffledQuestions[currentQuestionIndex];
+            speakCantonese(q.ttsWord || q.word);
+        }
+
+        function checkAnswer(selectedOption, questionData, isTimeout = false) {
+            clearInterval(timerInterval);
+            const isCorrect = selectedOption === questionData.correct;
+            
+            speakCantonese(questionData.ttsWord || questionData.word);
+
+            let timeBonus = 0;
+            if (isCorrect && !isTimeout) {
+                timeBonus = Math.floor((timeLeft / 100) * 50);
+                score += (BASE_SCORE + timeBonus);
+                $('ui-score').innerText = score;
+            }
+
+            const fbIcon = $('feedback-icon');
+            const fbTitle = $('feedback-title');
+            const fbWord = $('feedback-word');
+            const fbWordEn = $('feedback-word-en');
+            const fbAns = $('feedback-correct-ans');
+            const fbTipEn = $('feedback-tip-en');
+            const fbTip = $('feedback-tip');
+
+            fbWord.innerText = questionData.word;
+            if (fbWordEn) fbWordEn.innerText = questionData.wordEn;
+            fbAns.innerText = questionData.correct;
+            fbTipEn.innerText = questionData.tipEn;
+            fbTip.innerText = questionData.tip;
+
+            if(isTimeout) {
+                fbIcon.innerText = "⏰";
+                fbTitle.innerText = "Time's Up!";
+                fbTitle.className = "text-2xl font-black mb-1 text-slate-600";
+            } else if(isCorrect) {
+                fbIcon.innerText = "✅";
+                fbTitle.innerText = "Correct!";
+                fbTitle.className = "text-2xl font-black mb-1 text-market-green";
+            } else {
+                fbIcon.innerText = "❌";
+                fbTitle.innerText = "Oops!";
+                fbTitle.className = "text-2xl font-black mb-1 text-market-red";
+            }
+
+            // Show Feedback Overlay
+            const modal = $('modal-feedback');
+            modal.classList.remove('hidden-screen');
+            // Small reflow hack for animation
+            void modal.offsetWidth; 
+            modal.querySelector('div').classList.add('scale-100');
+        }
+
+        window.nextQuestion = function() {
+            $('modal-feedback').classList.add('hidden-screen');
+            currentQuestionIndex++;
+            if (currentQuestionIndex < shuffledQuestions.length) {
+                loadQuestion();
+            } else {
+                endGame();
+            }
+        }
+
+        function endGame() {
+            $('ui-final-score').innerText = score;
+            
+            let rank = "";
+            let maxBaseScore = shuffledQuestions.length * BASE_SCORE;
+            let ratio = score / maxBaseScore; 
+
+            if (ratio >= 1.2) {
+                rank = "🌟 Local Market Master";
+            } else if (ratio >= 0.9) {
+                rank = "😎 Smart Shopper";
+            } else if (ratio >= 0.5) {
+                rank = "📚 Tourist Learning Fast";
+            } else {
+                rank = "✈️ Lost Tourist";
+            }
+            
+            $('ui-rank').innerText = rank;
+            showScreen('screen-end');
+        }
+    </script>
+</body>
+</html>
